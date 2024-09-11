@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Realtime web application</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js" integrity="sha512-luMnTJZ7oEchNDZAtQhgjomP1eZefnl82ruTH/3Oj/Yu5qYtwL7+dVRccACS/Snp1lFXq188XFipHKYE75IaQQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+
+        // backend - front = same server
+        const clientIO = io.connect()
+        // clientIO.on() // รอรับสัญญาณ
+        // clientIO.emit() // ส่งสัญญาณ
+        clientIO.on('order', (data)=>{
+            // append = ต่อท้ายข้อมูลที่มีอยู่ก่อน
+            // prepend = แทรกข้างหน้าข้อมูลที่มีอยู่ก่อน
+            render_order(data)
+        })
+
+        clientIO.on('confirm_order', (data)=>{
+            const {id, order_status} = data
+            $(`.btn-confirm[data-id=${id}]`).attr('disabled', true).text('ยืนยันแล้ว')
+            // .btn-confirm[data-id=34]
+            $(`.order-status[data-id=${id}]`).text(1)
+        })
+
+        $(function(){ // document ready function
+
+            get_order();
+
+            $('#order-list').on('click', '.btn-confirm', async (e)=>{
+                // $(e.target).attr('data-id')
+                const id = $(e.target).data('id')
+                // post
+                /*await fetch('/order/confirm_order', {
+                    headers: { 'content-type': 'application/json' },
+                    method: 'post',
+                    body: JSON.stringify({id})
+                })*/
+
+                // get params
+                await fetch(`/order/confirm_order/${id}`)
+
+                // query string
+                //await fetch(`/order/confirm_order?id=${id}`)
+            })
+
+            $("#btn-submit").on('click', async ()=>{
+                const product = $('#product').val()
+                const amount = $('#amount').val()
+                const postData = { product, amount }
+                //console.log(postData)
+                //$.post()
+                //$.get()
+               /* $.ajax({
+                    headers:{
+                        'content-type': 'application/json'
+                    },
+                    url: '/order/add_order',
+                    type: 'POST',
+                    data: JSON.stringify(postData),
+                    dataType: 'json',
+                    success: function(response){
+                        console.log(response)
+                    }
+                })*/
+
+               const data = await fetch('/order/add_order', {
+                    headers: { 'content-type': 'application/json' },
+                    method: 'post',
+                    body: JSON.stringify(postData)
+                })
+                const order = await data.json()
+                // render order list
+
+                // axios library
+            })
+        })
+
+        async function get_order(){
+            const data = await fetch('/order/order_list')
+            const orders = await data.json()
+            orders.forEach((order, index)=>{
+                render_order(order)
+            })
+        }
+
+        function render_order(data){
+            const {id, order_id, product, amount, created, order_status} = data
+            const btn_text = (order_status)?'ยืนยันแล้ว':'รอยืนยัน'
+            const btn_disabled = (order_status)?'disabled':''
+            $('#order-list').append(`
+                <div>
+                    id: ${id}, order_id: ${order_id}, product: ${product}, amount: ${amount}
+                    created: ${created}, order_status: <span class='order-status' data-id="${id}">${order_status}</span>
+                    <button type="button" class="btn-confirm" data-id="${id}" ${btn_disabled}>${btn_text}</button>
+                </div>
+            `)
+        }
+    </script>
+</head>
+<body>
+    <h1>Welcome to realtime web application</h1>
+    <input type="text" id="product" value="ปากกา"/>
+    <input type="number" id="amount" value="10">
+    <button type="button" id="btn-submit">Submit</button>
+    <div id="order-list"></div>
+</body>
+</html>
