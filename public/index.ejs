@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="./css/style.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js" integrity="sha512-luMnTJZ7oEchNDZAtQhgjomP1eZefnl82ruTH/3Oj/Yu5qYtwL7+dVRccACS/Snp1lFXq188XFipHKYE75IaQQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.omise.co/omise.js"></script>
     <script>
 
         // backend - front = same server
@@ -48,8 +49,9 @@
 
             $("#btn-submit").on('click', async ()=>{
                 const product = $('#product').val()
+                const unit_price = $('#unit_price').val()
                 const amount = $('#amount').val()
-                const postData = { product, amount }
+                const postData = { product, unit_price, amount }
                 //console.log(postData)
                 //$.post()
                 //$.get()
@@ -76,7 +78,60 @@
 
                 // axios library
             })
+
+            $('#order-list').on('click', '.btn-pay', async (e)=>{
+                const order_id = $(e.target).data('order_id')
+                const total = $(e.target).data('total')
+                
+                // omise
+                OmiseCard.configure({
+                    publicKey: 'pkey_test_5i36vsmd4088wc05dea'
+                })
+                OmiseCard.open({
+                    locale: 'th',
+                    amount: total*100,
+                    currency: 'thb',
+                    defaultPaymentMethod: 'promptpay',
+                    otherPaymentMethods: 'credit_card, mobile_banking_bbl, mobile_banking_kbank',
+                    onCreateTokenSuccess: function(nonce){
+                        // nonce = token/source
+                        // nonce = tokn_ = token = credit_card
+                        // nonce = src_ = source = other payment
+                        // nonce = number used once" or "number once
+                        console.log(nonce)
+                        charge({
+                            metadata: {
+                                order_id: order_id
+                            },
+                            amount: total*100,
+                            currency: 'thb',
+                            return_uri: 'http://localhost:3000/complete?order_id='+order_id,
+                            nonce: nonce
+                        })
+                    }
+                })
+            })
         })
+
+        async function charge(postData){
+            const data = await fetch('/api/charge', {
+                headers: {
+                    'content-type': 'application/json'
+                },
+                method: 'post',
+                body: JSON.stringify(postData)
+            })
+            
+            const json = await data.json()
+            console.log(json)
+            if(json.source?.type == 'promptpay'){
+                // qrcode
+                const qrcode = json.source.scannable_code.image.download_uri
+                $('#qrcode').attr('src', qrcode)
+            }else{
+                window.location = json.authorize_uri
+            }
+        }
 
         async function get_order(){
             const data = await fetch('/order/order_list')
@@ -87,13 +142,15 @@
         }
 
         function render_order(data){
-            const {id, order_id, product, amount, created, order_status} = data
+            const {id, order_id, product, amount, created, order_status, unit_price, total} = data
             const btn_text = (order_status)?'ยืนยันแล้ว':'รอยืนยัน'
             const btn_disabled = (order_status)?'disabled':''
             $('#order-list').append(`
                 <div>
                     id: ${id}, order_id: ${order_id}, product: ${product}, amount: ${amount}
                     created: ${created}, order_status: <span class='order-status' data-id="${id}">${order_status}</span>
+                    unit_price: ${unit_price}, total: ${total}
+                    <button type="button" data-order_id="${id}" data-total="${total}" class="btn-pay">ชำระเงิน</button>
                     <button type="button" class="btn-confirm" data-id="${id}" ${btn_disabled}>${btn_text}</button>
                 </div>
             `)
@@ -102,9 +159,11 @@
 </head>
 <body>
     <h1>Welcome to realtime web application</h1>
-    <input type="text" id="product" value="ปากกา"/>
-    <input type="number" id="amount" value="10">
+    <input type="text" id="product" placeholder="สินค้า" value="ปากกา"/>
+    <input type="number" id="unit_price" placeholder="unit_price" value="5">
+    <input type="number" id="amount" placeholder="amount" value="10">
     <button type="button" id="btn-submit">Submit</button>
     <div id="order-list"></div>
+    <img id="qrcode" style="width:200px">
 </body>
 </html>
